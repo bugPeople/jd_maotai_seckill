@@ -4,6 +4,10 @@ import requests
 import os
 import time
 
+from PIL import Image
+from pyzbar.pyzbar import decode
+import qrcode_terminal
+
 from maotai.config import global_config
 
 USER_AGENTS = [
@@ -109,6 +113,16 @@ def open_image(image_file):
         else:
             os.system("open " + image_file)  # for Mac
 
+
+def show_qrcode_in_terminal(image_file):
+    img = Image.open(image_file)
+    result = decode(img)
+
+    data = None
+    for i in result:
+        data = i.data.decode("utf-8")
+
+    qrcode_terminal.draw(data, 5)
 
 def save_image(resp, image_file):
     with open(image_file, 'wb') as f:

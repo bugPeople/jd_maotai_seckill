@@ -19,6 +19,7 @@ from helper.jd_helper import (
     wait_some_time,
     response_status,
     save_image,
+    show_qrcode_in_terminal,
     open_image
 )
 
@@ -178,7 +179,9 @@ class QrLogin:
 
         save_image(resp, self.qrcode_img_file)
         logger.info('二维码获取成功，请打开京东APP扫描')
-        open_image(self.qrcode_img_file)
+        send_wechat('二维码获取成功，需要使用京东APP扫描')
+        #open_image(self.qrcode_img_file)
+        show_qrcode_in_terminal(self.qrcode_img_file)
         return True
 
     def _get_qrcode_ticket(self):
@@ -205,7 +208,8 @@ class QrLogin:
 
         resp_json = parse_json(resp.text)
         if resp_json['code'] != 200:
-            logger.info('Code: %s, Message: %s', resp_json['code'], resp_json['msg'])
+            # 不提示信息，一直到用户扫描二维码为止
+            #logger.info('Code: %s, Message: %s', resp_json['code'], resp_json['msg'])
             return None
         else:
             logger.info('已完成手机客户端确认')
@@ -247,8 +251,11 @@ class QrLogin:
 
         # get QR code ticket
         ticket = None
-        retry_times = 85
-        for _ in range(retry_times):
+
+        # 一直等待用户扫描二维码
+        #retry_times = 85
+        #for _ in range(retry_times):
+        while True:
             ticket = self._get_qrcode_ticket()
             if ticket:
                 break
@@ -266,7 +273,7 @@ class QrLogin:
 
 
 class JdSeckill(object):
-    def __init__(self):
+    def __init__(self, run_once=False):
         self.spider_session = SpiderSession()
         self.spider_session.load_cookies_from_local()
 
@@ -283,6 +290,8 @@ class JdSeckill(object):
         self.session = self.spider_session.get_session()
         self.user_agent = self.spider_session.user_agent
         self.nick_name = None
+
+        self.run_once = run_once
 
     def login_by_qrcode(self):
         """
@@ -330,6 +339,19 @@ class JdSeckill(object):
         self._seckill()
 
     @check_login
+    def reserve_and_seckill(self):
+        """
+        预约并抢购
+        """
+        while True:
+            # 预约逻辑只执行一次，通过改变run_once控制
+            self.run_once = True
+            self._reserve()
+
+            # 抢购
+            self._seckill()
+
+    @check_login
     def seckill_by_proc_pool(self, work_count=5):
         """
         多进程进行抢购
@@ -344,6 +366,8 @@ class JdSeckill(object):
         预约
         """
         while True:
+            # 重新计算下一次预约时间
+            self.timers = Timer()
             try:
                 self.make_reserve()
                 break
@@ -356,14 +380,23 @@ class JdSeckill(object):
         抢购
         """
         while True:
+            # 每天抢购结束后，需要重新获取新的时间点
+            logger.info("重新获取秒杀开始时间...")
+            self.timers = Timer()
             try:
                 self.request_seckill_url()
                 while True:
                     self.request_seckill_checkout_page()
                     self.submit_seckill_order()
+                    if self.timers.is_end():
+                        logger.info("秒杀已经结束，等待下一次开始.")
+                        break
             except Exception as e:
                 logger.info('抢购发生异常，稍后继续执行！', e)
             wait_some_time()
+            if self.run_once:
+                logger.info('本次抢购结束')
+                break
 
     def make_reserve(self):
         """商品预约"""
@@ -381,7 +414,8 @@ class JdSeckill(object):
         resp = self.session.get(url=url, params=payload, headers=headers)
         resp_json = parse_json(resp.text)
         reserve_url = resp_json.get('url')
-        self.timers.start()
+        if not self.run_once:
+            self.timers.start()
         while True:
             try:
                 self.session.get(url='https:' + reserve_url)

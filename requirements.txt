@@ -4,3 +4,7 @@ idna==2.9
 lxml==4.5.1
 requests==2.23.0
 urllib3==1.25.9
+pillow==8.1.0
+pyqrcode
+qrcode_terminal==0.8
+pyzbar==0.1.8
