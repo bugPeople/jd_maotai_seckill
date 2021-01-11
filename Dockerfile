@@ -1,6 +1,7 @@
 FROM centos:7
 
 ENV LANG en_US.UTF8
+ENV TZ Asia/Shanghai
 
 COPY . /app
 
