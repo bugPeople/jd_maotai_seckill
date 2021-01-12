@@ -1,0 +1,8 @@
+version: '2.1'
+
+services:
+  jd-seckill:
+    image: jd_seckill:latest
+    container_name: jd-seckill
+    restart: unless-stopped
+    network_mode: host
