@@ -4,6 +4,7 @@ import requests
 import os
 import time
 
+from dingtalkchatbot.chatbot import DingtalkChatbot
 from PIL import Image
 from pyzbar.pyzbar import decode
 import qrcode_terminal
@@ -94,6 +95,28 @@ def send_wechat(message):
     requests.get(url, params=payload, headers=headers)
 
 
+def send_text_msg(message):
+    """推送消息到钉钉"""
+    webhook = global_config.getRaw('messenger', 'webhook')
+    secret = global_config.getRaw('messenger', 'secret')
+    xiaoding = DingtalkChatbot(webhook, secret=secret)
+    xiaoding.send_text(msg=message)
+
+
+def send_url_msg(title, url):
+    """将登陆连接以Markdown发送至手机，点击后即可完成登陆"""
+
+    # 获取钉钉消息信息
+    webhook = global_config.getRaw('messenger', 'webhook')
+    secret = global_config.getRaw('messenger', 'secret')
+    
+    xiaoding = DingtalkChatbot(webhook, secret=secret)
+    xiaoding.send_markdown(
+        title=title,
+        text="[%s](%s)" % (url, url)
+    )
+
+
 def response_status(resp):
     if resp.status_code != requests.codes.OK:
         print('Status: %u, Url: %s' % (resp.status_code, resp.url))
@@ -122,7 +145,9 @@ def show_qrcode_in_terminal(image_file):
     for i in result:
         data = i.data.decode("utf-8")
 
+    qr_code_info = data
     qrcode_terminal.draw(data, 5)
+    return qr_code_info
 
 def save_image(resp, image_file):
     with open(image_file, 'wb') as f:

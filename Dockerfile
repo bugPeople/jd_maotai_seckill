@@ -4,6 +4,7 @@ ENV LANG en_US.UTF8
 ENV TZ Asia/Shanghai
 
 COPY . /app
+COPY pip.conf /root/.pip/pip.conf
 
 WORKDIR /app
 

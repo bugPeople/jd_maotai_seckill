@@ -15,12 +15,11 @@ from maotai.config import global_config
 from concurrent.futures import ProcessPoolExecutor
 from helper.jd_helper import (
     parse_json,
-    send_wechat,
+    send_text_msg,
     wait_some_time,
     response_status,
     save_image,
-    show_qrcode_in_terminal,
-    open_image
+    show_qrcode_in_terminal
 )
 
 
@@ -179,9 +178,10 @@ class QrLogin:
 
         save_image(resp, self.qrcode_img_file)
         logger.info('二维码获取成功，请打开京东APP扫描')
-        send_wechat('二维码获取成功，需要使用京东APP扫描')
         #open_image(self.qrcode_img_file)
-        show_qrcode_in_terminal(self.qrcode_img_file)
+        login_url = show_qrcode_in_terminal(self.qrcode_img_file)
+        send_text_msg(login_url)
+
         return True
 
     def _get_qrcode_ticket(self):
@@ -285,7 +285,7 @@ class JdSeckill(object):
         self.seckill_init_info = dict()
         self.seckill_url = dict()
         self.seckill_order_data = dict()
-        self.timers = Timer()
+        self.timers = None
 
         self.session = self.spider_session.get_session()
         self.user_agent = self.spider_session.user_agent
@@ -325,78 +325,59 @@ class JdSeckill(object):
         return new_func
 
     @check_login
-    def reserve(self):
-        """
-        预约
-        """
-        self._reserve()
-
-    @check_login
-    def seckill(self):
-        """
-        抢购
-        """
-        self._seckill()
-
-    @check_login
-    def reserve_and_seckill(self):
+    def reserve_and_seckill(self, work_count=5):
         """
         预约并抢购
         """
+        user_run_once = self.run_once
         while True:
-            # 预约逻辑只执行一次，通过改变run_once控制
             self.run_once = True
-            self._reserve()
 
-            # 抢购
-            self._seckill()
-
-    @check_login
-    def seckill_by_proc_pool(self, work_count=5):
-        """
-        多进程进行抢购
-        work_count：进程数量
-        """
-        with ProcessPoolExecutor(work_count) as pool:
-            for i in range(work_count):
-                pool.submit(self.seckill)
-
-    def _reserve(self):
-        """
-        预约
-        """
-        while True:
-            # 重新计算下一次预约时间
+            # 每天抢购结束后，需要重新获取新的时间点
+            logger.info("重新获取秒杀开始时间...")
             self.timers = Timer()
+
+            logger.info("开始预约")
             try:
                 self.make_reserve()
-                break
             except Exception as e:
                 logger.info('预约发生异常!', e)
-            wait_some_time()
+
+            logger.info("等待验证Cookie是否已经过期")
+            if self.timers.need_relogin():
+                self.validate_cookie()
+
+            logger.info("等待进入秒杀")
+            with ProcessPoolExecutor(work_count) as pool:
+                for i in range(work_count):
+                    pool.submit(self._seckill)
+            logger.info("本次抢购进程全部结束并退出")
+
+            if user_run_once:
+                logger.info("用户设定只运行一次，退出循环...")
+                break
+            else:
+                wait_some_time()
+
+    @check_login
+    def validate_cookie(self):
+        logger.info("Cookie仍然有效")
 
     def _seckill(self):
         """
         抢购
         """
-        while True:
-            # 每天抢购结束后，需要重新获取新的时间点
-            logger.info("重新获取秒杀开始时间...")
-            self.timers = Timer()
-            try:
-                self.request_seckill_url()
-                while True:
-                    self.request_seckill_checkout_page()
-                    self.submit_seckill_order()
-                    if self.timers.is_end():
-                        logger.info("秒杀已经结束，等待下一次开始.")
-                        break
-            except Exception as e:
-                logger.info('抢购发生异常，稍后继续执行！', e)
-            wait_some_time()
-            if self.run_once:
-                logger.info('本次抢购结束')
-                break
+        try:
+            self.request_seckill_url()
+            while True:
+                self.request_seckill_checkout_page()
+                self.submit_seckill_order()
+
+                if self.timers.is_end():
+                    logger.info("秒杀已经结束，等待下一次开始.")
+                    break
+        except Exception as e:
+            logger.info('抢购发生异常，稍后继续执行！', e)
 
     def make_reserve(self):
         """商品预约"""
@@ -422,7 +403,7 @@ class JdSeckill(object):
                 logger.info('预约成功，已获得抢购资格 / 您已成功预约过了，无需重复预约')
                 if global_config.getRaw('messenger', 'enable') == 'true':
                     success_message = "预约成功，已获得抢购资格 / 您已成功预约过了，无需重复预约"
-                    send_wechat(success_message)
+                    send_text_msg(success_message)
                 break
             except Exception as e:
                 logger.error('预约失败正在重试...')
@@ -614,7 +595,8 @@ class JdSeckill(object):
         try:
             self.seckill_order_data[self.sku_id] = self._get_seckill_order_data()
         except Exception as e:
-            logger.info('抢购失败，无法获取生成订单的基本信息，接口返回:【{}】'.format(str(e)))
+            logger.warning('抢购失败，无法获取生成订单的基本信息')
+            logger.error(e)
             return False
 
         logger.info('提交抢购订单...')
@@ -650,11 +632,11 @@ class JdSeckill(object):
             logger.info('抢购成功，订单号:{}, 总价:{}, 电脑端付款链接:{}'.format(order_id, total_money, pay_url))
             if global_config.getRaw('messenger', 'enable') == 'true':
                 success_message = "抢购成功，订单号:{}, 总价:{}, 电脑端付款链接:{}".format(order_id, total_money, pay_url)
-                send_wechat(success_message)
+                send_text_msg(success_message)
             return True
         else:
             logger.info('抢购失败，返回信息:{}'.format(resp_json))
             if global_config.getRaw('messenger', 'enable') == 'true':
                 error_message = '抢购失败，返回信息:{}'.format(resp_json)
-                send_wechat(error_message)
+                send_text_msg(error_message)
             return False

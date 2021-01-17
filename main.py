@@ -54,14 +54,6 @@ def parse_sys_args(argv):
         "-v", "--verbose", action="store_true", dest="verbose",
         default=False, help="Show message in standard output.")
     parser.add_argument(
-        "-r", "--reserve", action="store_true",
-        dest="reserve", required=False,
-        default=False, help="Reserve product.")
-    parser.add_argument(
-        "-s", "--seckill", action="store_true",
-        dest="seckill", required=False,
-        default=False, help="Second kill product.")
-    parser.add_argument(
         "-a", "--all", action="store_true",
         dest="all", required=False,
         default=False, help="Reserve and second kill product.")
@@ -77,17 +69,11 @@ def main():
     args, parser = parse_sys_args(sys.argv)
     log_init(CURRENT_PATH, SCRIPT_NAME, args.debug, args.verbose)
 
-    if not(args.reserve or args.seckill or args.all):
+    if not args.all:
         parser.print_help()
         sys.exit(1)
 
     jd_seckill = JdSeckill(run_once=args.run_once)
-
-    if args.reserve:
-        jd_seckill.reserve()
-
-    if args.seckill:
-        jd_seckill.seckill_by_proc_pool()
 
     if args.all:
         jd_seckill.reserve_and_seckill()

@@ -8,3 +8,4 @@ pillow==8.1.0
 pyqrcode
 qrcode_terminal==0.8
 pyzbar==0.1.8
+DingtalkChatbot==1.5.2

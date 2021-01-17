@@ -123,3 +123,5 @@ qr_code.png
 # jupyter
 .ipynb_checkpoints
 /test/
+
+*.bak

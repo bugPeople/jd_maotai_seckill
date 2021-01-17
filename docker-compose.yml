@@ -6,3 +6,7 @@ services:
     container_name: jd-seckill
     restart: unless-stopped
     network_mode: host
+    volumes:
+      - ./cookies:/app/cookies
+      - ./config.ini:/app/config.ini
+

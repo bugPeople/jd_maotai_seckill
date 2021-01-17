@@ -13,8 +13,12 @@ class Timer(object):
         # '2018-09-28 22:45:50.000'
         # buy_time = 2020-12-22 09:59:59.500
         localtime = time.localtime(time.time())
-        buy_time_everyday = global_config.getRaw('config', 'buy_time').__str__()
-        last_purchase_time_everyday = global_config.getRaw('config', 'last_purchase_time').__str__()
+        buy_time_everyday = global_config.getRaw(
+            'config', 'buy_time').__str__()
+        last_purchase_time_everyday = global_config.getRaw(
+            'config', 'last_purchase_time').__str__()
+        relogin_time_everyday = global_config.getRaw(
+            'config', 'relogin_time').__str__()
 
         # 最后购买时间
         self.last_purchase_time = datetime.strptime(
@@ -25,10 +29,14 @@ class Timer(object):
         buy_time_config = datetime.strptime(
             localtime.tm_year.__str__() + '-' + localtime.tm_mon.__str__() + '-' + localtime.tm_mday.__str__() + ' ' + buy_time_everyday,
             "%Y-%m-%d %H:%M:%S.%f")
+        relogin_time_config = datetime.strptime(
+            localtime.tm_year.__str__() + '-' + localtime.tm_mon.__str__() + '-' + localtime.tm_mday.__str__() + ' ' + relogin_time_everyday,
+            "%Y-%m-%d %H:%M:%S.%f")
 
         if time.mktime(localtime) < time.mktime(buy_time_config.timetuple()):
             # 取正确的购买时间
             self.buy_time = buy_time_config
+            self.relogin_time = relogin_time_config
         # elif time.mktime(localtime) > time.mktime(self.last_purchase_time.timetuple()):
         #     # 取明天的时间 购买时间
         #     self.buy_time = datetime.strptime(
@@ -40,11 +48,18 @@ class Timer(object):
                 localtime.tm_year.__str__() + '-' + localtime.tm_mon.__str__() + '-' + (
                         localtime.tm_mday + 1).__str__() + ' ' + buy_time_everyday,
                 "%Y-%m-%d %H:%M:%S.%f")
+            self.relogin_time = datetime.strptime(
+                localtime.tm_year.__str__() + '-' + localtime.tm_mon.__str__() + '-' + (
+                        localtime.tm_mday + 1).__str__() + ' ' + relogin_time_everyday,
+                "%Y-%m-%d %H:%M:%S.%f")
 
         # self.buy_time = buy_time_config
         logger.info("开始购买时间：{}".format(self.buy_time))
+        logger.info("重新登陆时间：{}".format(self.relogin_time))
 
         self.buy_time_ms = int(time.mktime(self.buy_time.timetuple()) * 1000.0 + self.buy_time.microsecond / 1000)
+        self.relogin_ms = int(time.mktime(self.relogin_time.timetuple()) * 1000.0 + self.relogin_time.microsecond / 1000)
+
         self.sleep_interval = sleep_interval
 
         self.diff_time = self.local_jd_time_diff()
@@ -94,3 +109,12 @@ class Timer(object):
         计算秒杀是否结束
         """
         return self.local_time() - self.diff_time >= self.buy_endtime_ms
+
+    def need_relogin(self):
+        """计算是否需要重新登陆"""
+        while True:
+            if self.local_time() >= self.relogin_ms:
+                logger.info("时间到达，验证是否需要重新登陆......")
+                break
+            else:
+                time.sleep(self.sleep_interval)
