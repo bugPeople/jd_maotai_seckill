@@ -361,7 +361,9 @@ class JdSeckill(object):
 
     @check_login
     def validate_cookie(self):
-        logger.info("Cookie仍然有效")
+        logger.info("重新加载最新Cookie")
+        self.spider_session.load_cookies_from_local()
+        self.session = self.spider_session.get_session()
 
     def _seckill(self):
         """
@@ -595,8 +597,7 @@ class JdSeckill(object):
         try:
             self.seckill_order_data[self.sku_id] = self._get_seckill_order_data()
         except Exception as e:
-            logger.warning('抢购失败，无法获取生成订单的基本信息')
-            logger.error(e)
+            logger.info('抢购失败，无法获取生成订单的基本信息，接口返回:【{}】'.format(str(e)))
             return False
 
         logger.info('提交抢购订单...')
